@@ -119,7 +119,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 | POST  | /predict  | Предсказание вероятности конверсии                  |
 
 ### Пример запроса POST /predict
-
+'''text
 json
 {
   "session_id": "1234567890.1234567890",
@@ -141,7 +141,7 @@ json
   "geo_city": "Moscow",
   "device_screen_resolution": "412x915"
 }
-
+'''
 
 ### Пример ответа
 
