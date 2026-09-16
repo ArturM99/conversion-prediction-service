@@ -159,6 +159,5 @@ main.py and train.py use the same transformer classes from pipeline.py, so data 
 Loading raw data (load_data() in pipeline.py) isn't tied to a specific filename or format — you can freely change the event file number (-001, -002, ...) or format (.parquet/.pkl/.csv) without touching the code.
 Model - DecisionTreeClassifier with class_weight="balanced", max_depth=10, min_samples_leaf=20 (depth/leaf constraints reduce overfitting given the strong class imbalance).
 ```
--e 
 ---
 🇷🇺 [Читать на русском](https://github.com/ArturM99/conversion-prediction-service/tree/RU)
