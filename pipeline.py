@@ -33,32 +33,32 @@ def read_data_file(prefix):
         if matches:
             path = matches[0]
             if len(matches) > 1:
-                print(f"Внимание: найдено несколько файлов {matches}, "
-                      f"используется {path}")
-            print(f"Найден файл: {path}")
+                print(f"Warning: multiple files found {matches}, "
+                      f"using {path}")
+            print(f"Found file: {path}")
             return reader(path)
 
     tried = ",".join(f"{prefix}*{ext}" for ext, _ in DATA_READERS)
-    raise FileNotFoundError(f"Не найден ни один файл по шаблонам: {tried}."
-                            f"Положите файлы данных рядом с проектом")
+    raise FileNotFoundError(f"No file found matching patterns: {tried}. "
+                            f"Place the data files next to the project")
 
 def load_data():
-    print("Загрузка GA Hits...")
+    print("Loading GA Hits...")
     hitc = read_data_file(HITS_PREFIX)
     hits = hitc[["session_id", "event_action"]].copy()
 
     del hitc
     gc.collect()
-    print("GA Hits загружены.")
+    print("GA Hits loaded.")
 
     hits["is_target"] = (hits["event_action"].isin(TARGET_ACTIONS).astype("int8"))
     target_df = (hits.groupby("session_id", as_index=False)["is_target"].max().rename(columns={"is_target": "target"}))
 
     del hits
     gc.collect()
-    print("Target сформирован.")
+    print("Target built.")
 
-    print("Загрузка GA Sessions...")
+    print("Loading GA Sessions...")
     sessions = read_data_file(SESSIONS_PREFIX)
     print(f"GA Sessions: {sessions.shape}")
     df = sessions.merge(target_df, on="session_id", how="left")
@@ -68,8 +68,8 @@ def load_data():
     gc.collect()
 
     df["target"] = (df["target"].fillna(0).astype("int8"))
-    print(f"Итоговый датасет: {df.shape}")
-    print(f"Доля target=1: {df['target'].mean():.4f}")
+    print(f"Final dataset: {df.shape}")
+    print(f"Target=1 share: {df['target'].mean():.4f}")
 
     return df
 

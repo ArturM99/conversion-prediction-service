@@ -54,7 +54,7 @@ def predict(form: Form):
     try:
         probability = model["model"].predict_proba(df)[0][1]
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Ошибка предсказания: {e}")
+        raise HTTPException(status_code=400, detail=f"Prediction error: {e}")
 
     prediction = int(probability >= 0.5)
 

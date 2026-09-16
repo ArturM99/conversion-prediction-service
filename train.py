@@ -12,7 +12,7 @@ MODEL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ga_model.
 
 
 def train():
-    print("НАЧАЛО ОБУЧЕНИЯ")
+    print("STARTING TRAINING")
     df = load_data()
     X = df.drop(columns=["target"])
     y = df["target"]
@@ -27,11 +27,11 @@ def train():
     pipeline = build_pipeline()
 
     print()
-    print("Обучение Decision Tree...")
+    print("Training Decision Tree...")
     start_time = time.time()
     pipeline.fit(X_train, y_train)
     elapsed = time.time() - start_time
-    print(f"Время обучения: {elapsed:.1f} сек")
+    print(f"Training time: {elapsed:.1f} sec")
 
     train_proba = pipeline.predict_proba(X_train)[:, 1]
     test_proba = pipeline.predict_proba(X_test)[:, 1]
@@ -54,7 +54,7 @@ def train():
     with open(MODEL_FILE, "wb") as file:
         dill.dump(model_data, file)
 
-    print(f"Модель сохранена: {MODEL_FILE}")
+    print(f"Model saved: {MODEL_FILE}")
     return model_data
 
 if __name__ == "__main__":
