@@ -1,8 +1,8 @@
 # Conversion Prediction Model
 
-Модель предсказывает вероятность целевого действия (конверсии) пользователя на сайте по данным сессии Google Analytics (utm-метки, устройство, гео, время визита).
+The model predicts the probability of a target action (conversion) by a website user, based on Google Analytics session data (UTM tags, device, geo, visit time).
 
-Целевое действие — совершение одного из следующих событий в рамках сессии:
+The target action is the occurrence of one of the following events within a session:
 ```text
 sub_car_claim_click
 sub_car_claim_submit_click
@@ -13,25 +13,26 @@ sub_callback_submit_click
 sub_submit_success
 sub_car_request_submit_click
 ```
-## Структура проекта
+## Project structure
 ```text
-pipeline.py       # загрузка данных, feature engineering, сборка sklearn-пайплайна
-train.py          # обучение модели, сохранение ga_model.pkl
-main.py           # FastAPI-сервис для инференса
-ga_model.pkl      # обученная модель (создаётся train.py)
-ga_sessions.*   # исходные данные о сессиях (не входит в репозиторий)
-ga_hits*.*   # исходные данные о событиях (не входит в репозиторий)
+pipeline.py       # data loading, feature engineering, sklearn pipeline assembly
+train.py          # model training, saves ga_model.pkl
+main.py           # FastAPI inference service
+ga_model.pkl      # trained model (created by train.py)
+ga_sessions.*     # source session data (not included in the repo)
+ga_hits*.*        # source event data (not included in the repo)
 requirements.txt
 ```
-## Установка
-```text
-bash
+## Installation
+```bash
 python -m venv venv
 source venv/bin/activate    # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+```
 
-Минимальный набор зависимостей:
+Minimal dependencies:
 
+```
 fastapi
 uvicorn
 pandas
@@ -40,87 +41,84 @@ scikit-learn
 dill
 pyarrow
 ```
-## Данные
-```text
-Перед обучением положите в корень проекта файлы с сессиями и событиями. 
-Загрузчик данных (read_data_file в pipeline.py) находит их автоматически по префиксу имени, независимо от:
-формата файла — поддерживаются .parquet, .pkl, .csv (проверяются именно в этом порядке — если рядом лежит несколько форматов одного файла, будет использован первый найденный);
-суффикса/номера в имени — подойдут ga_hits-001.parquet, ga_hits-002.parquet, ga_hits_final.csv и т.п.
+## Data
 
-Ожидаемые префиксы:
+Before training, place the session and event files in the project root.
+The data loader (`read_data_file` in `pipeline.py`) finds them automatically by filename prefix, regardless of:
+- file format — `.parquet`, `.pkl`, `.csv` are supported (checked in this exact order — if several formats of the same file are present, the first one found is used);
+- suffix/number in the filename — `ga_hits-001.parquet`, `ga_hits-002.parquet`, `ga_hits_final.csv`, etc. all work.
 
-ga_sessions... — данные о сессиях (utm-метки, устройство, гео, дата/время визита и т.д.)
-ga_hits... — данные о событиях (session_id, event_action), используются для формирования таргета
+Expected prefixes:
 
-Если файл не найден ни в одном из поддерживаемых форматов, train.py завершится понятной ошибкой FileNotFoundError с указанием, какие шаблоны имён проверялись.
+- `ga_sessions...` — session data (UTM tags, device, geo, visit date/time, etc.)
+- `ga_hits...` — event data (`session_id`, `event_action`), used to build the target
 
-Если данные лежат в .csv, обратите внимание: этот формат не хранит типы данных так строго, как .parquet/.pkl — при необходимости стоит проверить df.dtypes после загрузки.
+If a file isn't found in any of the supported formats, `train.py` will fail with a clear `FileNotFoundError` listing which name patterns were checked.
+
+If the data is in `.csv`, note that this format doesn't preserve data types as strictly as `.parquet`/`.pkl` — check `df.dtypes` after loading if needed.
+
+## Training the model
+```bash
+python train.py
 ```
 
-## Обучение модели
-```text
-bash
-python train.py
+The script:
 
+1. Loads `ga_sessions.parquet` and `ga_hits-001.parquet`, builds a binary target (`target`) from the presence of target events in a session.
+2. Splits the data into train/test (70/30, stratified by target).
+3. Trains the pipeline: feature engineering → data cleaning → grouping of rare categories (top-N) → clipping outliers in screen height → feature selection → OneHot/imputation → `DecisionTreeClassifier`.
+4. Prints ROC-AUC on train and test.
+5. Saves the model together with metadata to `ga_model.pkl` (serialized via `dill`, to preserve custom transformers).
 
-Скрипт:
+Example output:
 
-1. Загружает `ga_sessions.parquet` и `ga_hits-001.parquet`, формирует бинарный таргет (`target`) по наличию целевых событий в сессии.
-2. Делит данные на train/test (70/30, стратификация по таргету).
-3. Обучает пайплайн: feature engineering → очистка данных → группировка редких категорий (top-N) → отсечение выбросов по высоте экрана → отбор признаков → OneHot/импутация → `DecisionTreeClassifier`.
-4. Выводит ROC-AUC на train и test.
-5. Сохраняет модель вместе с метаданными в `ga_model.pkl` (сериализация через `dill`, чтобы сохранить кастомные трансформеры).
-
-Пример вывода:
-
-Загрузка GA Hits...
-  Найден файл: ga_hits-001.parquet
-GA Hits загружены.
-Target сформирован.
-Загрузка GA Sessions...
-  Найден файл: ga_sessions.parquet
+```
+Loading GA Hits...
+  Found file: ga_hits-001.parquet
+GA Hits loaded.
+Target built.
+Loading GA Sessions...
+  Found file: ga_sessions.parquet
 GA Sessions: (XXXXXX, XX)
-Итоговый датасет: (XXXXXX, XX)
-Доля target=1: 0.XXXX
+Final dataset: (XXXXXX, XX)
+Target=1 share: 0.XXXX
 
 Train: (XXXXXX, XX)
 Test:  (XXXXXX, XX)
 
-Обучение Decision Tree...
-Время обучения: XX.X сек
+Training Decision Tree...
+Training time: XX.X sec
 
 Train ROC-AUC: 0.XXXX
 Test ROC-AUC:  0.XXXX
 ROC-AUC gap:   0.XXXX
-Модель сохранена: /path/to/ga_model.pkl
+Model saved: /path/to/ga_model.pkl
 ```
-## Признаки, используемые моделью
+## Features used by the model
 ```text
-Числовые: visit_number, has_keyword, is_russia, is_presence_city, visit_weekday, visit_hour, screen_width, screen_height.
+Numeric: visit_number, has_keyword, is_russia, is_presence_city, visit_weekday, visit_hour, screen_width, screen_height.
 
-Категориальные (после группировки редких значений в other):** utm_medium, device_category, device_os, device_browser, geo_city_grouped, utm_source_grouped, utm_campaign_grouped, device_brand_grouped, utm_adcontent_grouped.
+Categorical (after grouping rare values into "other"): utm_medium, device_category, device_os, device_browser, geo_city_grouped, utm_source_grouped, utm_campaign_grouped, device_brand_grouped, utm_adcontent_grouped.
 
-Признаки session_id, client_id, visit_date, visit_time, device_screen_resolution и исходные (негруппированные) категориальные поля используются только на промежуточных этапах и не подаются в модель напрямую.
+The fields session_id, client_id, visit_date, visit_time, device_screen_resolution, and the original (ungrouped) categorical columns are only used at intermediate stages and aren't fed into the model directly.
 ```
-## Запуск API
-```text
-bash
+## Running the API
+```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-
-Документация Swagger будет доступна по адресу: `http://localhost:8000/docs`
 ```
-### Эндпоинты
 
-| Метод | Путь      | Описание                                            |
-|-------|-----------|-----------------------------------------------------|
-| GET   | /status   | Проверка работоспособности сервиса                  |
-| GET   | /version  | Метаданные модели (название, версия, дата обучения) |
-| POST  | /predict  | Предсказание вероятности конверсии                  |
+Swagger docs will be available at: `http://localhost:8000/docs`
 
-### Пример запроса POST /predict
-```text
-json
+### Endpoints
+
+| Method | Path      | Description                                    |
+|--------|-----------|-------------------------------------------------|
+| GET    | /status   | Service health check                             |
+| GET    | /version  | Model metadata (name, version, training date)    |
+| POST   | /predict  | Predict conversion probability                    |
+
+### Example `POST /predict` request
+```json
 {
   "session_id": "1234567890.1234567890",
   "client_id": "987654321.1234567890",
@@ -143,22 +141,24 @@ json
 }
 ```
 
-### Пример ответа
-```text
-json
+### Example response
+```json
 {
   "session_id": "1234567890.1234567890",
   "prediction": 1,
   "probability": 0.7421
 }
-
-
-prediction — бинарный класс (0/1), полученный по порогу 0.5 от probability. probability — вероятность целевого действия, оценённая моделью.
 ```
-## Важно
+
+`prediction` — binary class (0/1), derived from `probability` at a 0.5 threshold. `probability` — the model's estimated probability of the target action.
+
+## Notes
 ```text
-Все поля формы, кроме session_id, client_id, visit_date, visit_time, visit_number, являются опциональными (None по умолчанию) — пропуски обрабатываются пайплайном автоматически.
-main.py и train.py используют одни и те же классы трансформеров из pipeline.py, поэтому обработка данных при обучении и при инференсе идентична.
-Загрузка сырых данных (load_data() в pipeline.py) не завязана на конкретное имя файла или формат — можно свободно менять номер файла событий (-001, -002, ...) или формат (.parquet/.pkl/.csv), не трогая код.
-Модель - DecisionTreeClassifier с class_weight="balanced", max_depth=10, min_samples_leaf=20 (ограничения глубины/листьев снижают переобучение при выраженном дисбалансе классов).
+All form fields except session_id, client_id, visit_date, visit_time, visit_number are optional (default None) — missing values are handled automatically by the pipeline.
+main.py and train.py use the same transformer classes from pipeline.py, so data handling is identical during training and inference.
+Loading raw data (load_data() in pipeline.py) isn't tied to a specific filename or format — you can freely change the event file number (-001, -002, ...) or format (.parquet/.pkl/.csv) without touching the code.
+Model - DecisionTreeClassifier with class_weight="balanced", max_depth=10, min_samples_leaf=20 (depth/leaf constraints reduce overfitting given the strong class imbalance).
 ```
+-e 
+---
+🇷🇺 [Читать на русском](https://github.com/ArturM99/conversion-prediction-service/tree/RU)
